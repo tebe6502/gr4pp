@@ -1,0 +1,1394 @@
+; ------------------------------------------------------------
+; Mad Pascal Compiler version 1.6.3 [2019/12/16] for 6502
+; ------------------------------------------------------------
+
+STACKWIDTH	= 16
+CODEORIGIN	= $2000
+
+TRUE		= 1
+FALSE		= 0
+
+; ------------------------------------------------------------
+
+	org $80
+
+fxptr	.ds 2
+
+eax	.ds 4						;8 bytes (aex + edx) -> divREAL
+edx	.ds 4
+ecx	.ds 4
+bp	.ds 2
+bp2	.ds 2
+
+ztmp
+ztmp8	.ds 1
+ztmp9	.ds 1
+ztmp10	.ds 1
+ztmp11	.ds 1
+
+TMP	.ds 2
+
+STACKORIGIN	.ds STACKWIDTH*4
+
+.print 'ZPFREE: $0000..',fxptr-1,' / ',*,'..',$ff
+
+; ------------------------------------------------------------
+
+ax	= eax
+al	= eax
+ah	= eax+1
+
+cx	= ecx
+cl	= ecx
+ch	= ecx+1
+
+dx	= edx
+dl	= edx
+dh	= edx+1
+
+	org eax
+
+FP1MAN0	.ds 1
+FP1MAN1	.ds 1
+FP1MAN2	.ds 1
+FP1MAN3	.ds 1
+
+	org ztmp8
+
+FP1SGN	.ds 1
+FP1EXP	.ds 1
+
+	org edx
+
+FP2MAN0	.ds 1
+FP2MAN1	.ds 1
+FP2MAN2	.ds 1
+FP2MAN3	.ds 1
+
+	org ztmp10
+
+FP2SGN	.ds 1
+FP2EXP	.ds 1
+
+	org ecx
+
+FPMAN0	.ds 1
+FPMAN1	.ds 1
+FPMAN2	.ds 1
+FPMAN3	.ds 1
+
+	org bp2
+
+FPSGN	.ds 1
+FPEXP	.ds 1
+
+.local	RESOURCE
+	icl 'res6502.asm'
+	?EXTDETECT = 0
+	?VBXDETECT = 0
+
+	RCDATA 'fntdith.fnt' CHARSET_RAM_ADDRESS 0 0 0 0 0 0 0 0
+	RCDATA 'fntdith.scr' VIDEO_RAM_ADDRESS 0 0 0 0 0 0 0 0
+.endl
+
+; ------------------------------------------------------------
+
+	org CODEORIGIN
+
+	STATICDATA
+
+; ------------------------------------------------------------
+
+RUNLIB
+	icl 'cpu6502.asm'
+
+.print 'RUNLIB: ',RUNLIB,'..',*
+
+; ------------------------------------------------------------
+
+START
+	tsx
+	stx MAIN.@halt+1
+
+	.ifdef fmulinit
+	fmulinit
+	eif
+
+VLEN	= VARDATASIZE-VARINITSIZE
+VADR	= DATAORIGIN+VARINITSIZE
+
+	ift VADR > $BFFF
+	ert 'Invalid memory address range ',VADR
+	eli (VLEN>0) && (VLEN<=256)
+	ldx #256-VLEN
+	lda #0
+	sta:rne VADR+VLEN-256,x+
+	eli VLEN>0
+	@fill #VADR #VLEN #0
+	eif
+
+	ldx #$0f
+	mva:rpl $340,x MAIN.IOCB@COPY,x-
+
+	inx		; X = 0 !!!
+	stx bp		; lo BP = 0
+
+	UNITINITIALIZATION
+
+.local	MAIN						; PROCEDURE
+
+	jmp l_0007
+
+; ------------------------------------------------------------
+
+.local	SYSTEM						; UNIT
+
+.local	PAUSE_002D					; PROCEDURE | ASSEMBLER | OVERLOAD
+
+; ---------------------  ASM Block 039  ---------------------
+
+	lda:cmp:req :rtclok+2
+
+@exit
+	.ifdef @new
+	@FreeMem #@VarData #@VarDataSize
+	eif
+	rts						; ret
+.endl
+
+; ------------------------------------------------------------
+
+M_PI_2	= $0648
+D_PI_2	= $0192
+D_PI_180	= $0004
+MGTIA	= $0000
+MVBXE	= $0080
+VBXE_XDLADR	= $0000
+VBXE_BCBADR	= $0100
+VBXE_MAPADR	= $1000
+VBXE_OVRADR	= $5000
+VBXE_WINDOW	= $B000
+IDLI	= $0000
+IVBL	= $0001
+CH_DELCHR	= $00FE
+CH_ENTER	= $009B
+CH_ESC	= $001B
+CH_CURS_UP	= $001C
+CH_CURS_DOWN	= $001D
+CH_CURS_LEFT	= $001E
+CH_CURS_RIGHT	= $001F
+CH_TAB	= $007F
+CH_EOL	= $009B
+CH_CLR	= $007D
+CH_BELL	= $00FD
+CH_DEL	= $007E
+CH_DELLINE	= $009C
+CH_INSLINE	= $009D
+COLOR_BLACK	= $0000
+COLOR_WHITE	= $000E
+COLOR_RED	= $0032
+COLOR_CYAN	= $0096
+COLOR_VIOLET	= $0068
+COLOR_GREEN	= $00C4
+COLOR_BLUE	= $0074
+COLOR_YELLOW	= $00EE
+COLOR_ORANGE	= $0028
+COLOR_BROWN	= $00E4
+COLOR_LIGHTRED	= $003C
+COLOR_GRAY1	= $0004
+COLOR_GRAY2	= $0006
+COLOR_GRAY3	= $000A
+COLOR_LIGHTGREEN	= $00CC
+COLOR_LIGHTBLUE	= $007C
+FMOPENREAD	= $0004
+FMOPENWRITE	= $0008
+FMOPENAPPEND	= $0009
+FMOPENREADWRITE	= $000C
+SCREENWIDTH	= DATAORIGIN+$0000
+SCREENHEIGHT	= DATAORIGIN+$0002
+DATESEPARATOR	= DATAORIGIN+$0004
+TVSYSTEM	= $D014
+adr.PALETTE	= $02C0
+.var PALETTE	= adr.PALETTE .word
+adr.HPALETTE	= $D012
+.var HPALETTE	= adr.HPALETTE .word
+FILEMODE	= DATAORIGIN+$0005
+SCREENMODE	= DATAORIGIN+$0006
+IORESULT	= DATAORIGIN+$0007
+EOLN	= DATAORIGIN+$0008
+RNDSEED	= DATAORIGIN+$0009
+
+.endl							; UNIT SYSTEM
+
+; ------------------------------------------------------------
+
+.local	ATARI						; UNIT
+
+; ------------------------------------------------------------
+
+RTCLOK	= $0012
+ATRACT	= $004D
+LMARGIN	= $0052
+RMARGIN	= $0053
+ROWCRS	= $0054
+COLCRS	= $0055
+DINDEX	= $0057
+SAVMSC	= $0058
+RAMTOP	= $006A
+VDSLST	= $0200
+SDLSTL	= $0230
+TXTROW	= $0290
+TXTCOL	= $0291
+TINDEX	= $0293
+TXTMSC	= $0294
+SDMCTL	= $022F
+GPRIOR	= $026F
+CRSINH	= $02F0
+CHACT	= $02F3
+CHBAS	= $02F4
+CH	= $02FC
+PCOLR0	= $02C0
+PCOLR1	= $02C1
+PCOLR2	= $02C2
+PCOLR3	= $02C3
+COLOR0	= $02C4
+COLOR1	= $02C5
+COLOR2	= $02C6
+COLOR3	= $02C7
+COLOR4	= $02C8
+COLBAKS	= $02C8
+HPOSP0	= $D000
+HPOSP1	= $D001
+HPOSP2	= $D002
+HPOSP3	= $D003
+HPOSM0	= $D004
+HPOSM1	= $D005
+HPOSM2	= $D006
+HPOSM3	= $D007
+SIZEP0	= $D008
+SIZEP1	= $D009
+SIZEP2	= $D00A
+SIZEP3	= $D00B
+SIZEM	= $D00C
+GRAFP0	= $D00D
+GRAFP1	= $D00E
+GRAFP2	= $D00F
+GRAFP3	= $D010
+GRAFM	= $D011
+P0PF	= $D004
+PAL	= $D014
+COLPM0	= $D012
+COLPM1	= $D013
+COLPM2	= $D014
+COLPM3	= $D015
+COLPF0	= $D016
+COLPF1	= $D017
+COLPF2	= $D018
+COLPF3	= $D019
+COLBK	= $D01A
+PRIOR	= $D01B
+GRACTL	= $D01D
+HITCLR	= $D01E
+AUDF1	= $D200
+AUDC1	= $D201
+AUDF2	= $D202
+AUDC2	= $D203
+AUDF3	= $D204
+AUDC3	= $D205
+AUDF4	= $D206
+AUDC4	= $D207
+AUDCTL	= $D208
+SKSTAT	= $D20F
+PORTB	= $D301
+DMACTL	= $D400
+CHACTL	= $D401
+DLISTL	= $D402
+HSCROL	= $D404
+VSCROL	= $D405
+PMBASE	= $D407
+CHBASE	= $D409
+WSYNC	= $D40A
+VCOUNT	= $D40B
+PENH	= $D40C
+PENV	= $D40D
+NMIEN	= $D40E
+
+.endl							; UNIT ATARI
+
+; ------------------------------------------------------------
+
+.local	CRT						; UNIT
+
+.local	KEYPRESSED					; FUNCTION | ASSEMBLER
+
+; ---------------------  ASM Block 051  ---------------------
+
+	ldy #$00	; false
+	lda kbcodes
+	cmp #$ff
+	beq skp
+	iny		; true
+
+;	sty kbcodes
+
+skp	sty Result
+
+@exit
+
+; ------------------------------------------------------------
+
+; Push BYTE / CHAR / SHORTINT / BOOLEAN
+; as Pointer
+
+	inx						; add bx, 1
+	mva RESULT :STACKORIGIN,x
+
+	.ifdef @new
+	@FreeMem #@VarData #@VarDataSize
+	eif
+
+; ------------------------------------------------------------
+
+RESULT	= DATAORIGIN+$000C
+
+@VarData	= RESULT
+@VarDataSize	= 1
+
+	rts						; ret
+.endl
+
+; ------------------------------------------------------------
+
+TEXTATTR	= DATAORIGIN+$000B
+CONSOL	= $D01F
+CN_START_SELECT_OPTION	= $0000
+CN_SELECT_OPTION	= $0001
+CN_START_OPTION	= $0002
+CN_OPTION	= $0003
+CN_START_SELECT	= $0004
+CN_SELECT	= $0005
+CN_START	= $0006
+CN_NONE	= $0007
+BW40	= $0000
+CO40	= $0001
+BW80	= $0002
+CO80	= $0003
+MONO	= $0007
+C40	= $0001
+C80	= $0003
+BLACK	= $0000
+BLUE	= $0001
+GREEN	= $0002
+CYAN	= $0003
+RED	= $0004
+MAGENTA	= $0005
+BROWN	= $0006
+LIGHTGRAY	= $0007
+DARKGRAY	= $0008
+LIGHTBLUE	= $0009
+LIGHTGREEN	= $000A
+LIGHTCYAN	= $000B
+LIGHTRED	= $000C
+LIGHTMAGENTA	= $000D
+YELLOW	= $000E
+WHITE	= $000F
+BLINK	= $0080
+
+.endl							; UNIT CRT
+
+; ------------------------------------------------------------
+
+.local	GR4PP						; UNIT
+
+.local	G4DLI						; PROCEDURE | ASSEMBLER | INTERRUPT
+
+; ---------------------  ASM Block 058  ---------------------
+
+
+dli 
+    pha 
+    sta WSYNC
+    lda #4
+.def :VS_Upper = *-1
+    sta VSCROL
+    lda #3
+.def :VS_Lower = *-1
+    sta VSCROL
+    pla 
+
+	rti						; ret
+.endl
+
+.local	SETVS						; PROCEDURE | ASSEMBLER
+
+; ------------------------------------------------------------
+
+; Generate Assignment for BYTE / CHAR / SHORTINT / BOOLEAN
+; as Pointer
+	mva :STACKORIGIN,x LOWER
+	dex						; sub bx, 1
+
+; ------------------------------------------------------------
+
+; Generate Assignment for BYTE / CHAR / SHORTINT / BOOLEAN
+; as Pointer
+	mva :STACKORIGIN,x UPPER
+	dex						; sub bx, 1
+
+; ---------------------  ASM Block 059  ---------------------
+
+
+    lda upper
+    sta VS_Upper
+    lda lower
+    sta VS_Lower
+
+
+; ------------------------------------------------------------
+
+UPPER	= DATAORIGIN+$000F
+LOWER	= DATAORIGIN+$0010
+
+@VarData	= UPPER
+@VarDataSize	= 2
+
+@exit
+	.ifdef @new
+	@FreeMem #@VarData #@VarDataSize
+	eif
+	rts						; ret
+.endl
+
+.local	SETPIXELHEIGHT					; PROCEDURE
+
+; ------------------------------------------------------------
+
+; Generate Assignment for BYTE / CHAR / SHORTINT / BOOLEAN
+; as Pointer
+	mva :STACKORIGIN,x LINES
+	dex						; sub bx, 1
+
+; optimize OK (GR4PP), line = 79
+
+	ldy #1
+	lda LINES
+	cmp #$01
+	seq
+	bcs @+
+	dey
+@
+	sty :STACKORIGIN+9
+	ldy #1
+	lda LINES
+	cmp #$07
+	bcc @+
+	dey
+@
+	tya
+	and :STACKORIGIN+9
+	jeq l_005E
+
+; optimize FAIL ('SYSTEM.PAUSE_002D', GR4PP), line = 80
+	jsr SYSTEM.PAUSE_002D
+
+; optimize FAIL ('SETVS', GR4PP), line = 81
+	inx
+	lda #$08
+	sub LINES
+	sta :STACKORIGIN,x
+	inx
+	ldy LINES
+	dey
+	sty :STACKORIGIN,x
+	jsr SETVS
+l_005E
+
+; ------------------------------------------------------------
+
+LINES	= DATAORIGIN+$0011
+
+@VarData	= LINES
+@VarDataSize	= 1
+
+@exit
+	.ifdef @new
+	@FreeMem #@VarData #@VarDataSize
+	eif
+	rts						; ret
+.endl
+
+.local	DLPOKE						; PROCEDURE
+
+; ------------------------------------------------------------
+
+; Generate Assignment for BYTE / CHAR / SHORTINT / BOOLEAN
+; as Pointer
+	mva :STACKORIGIN,x B
+	dex						; sub bx, 1
+
+; optimize OK (GR4PP), line = 87
+
+	ldy DLIST
+	lda DLIST+1
+	sta :bp+1
+	lda B
+	sta (:bp),y
+
+; optimize FAIL (0, GR4PP), line = 88
+	inw DLIST
+
+; ------------------------------------------------------------
+
+B	= DATAORIGIN+$0012
+
+@VarData	= B
+@VarDataSize	= 1
+
+@exit
+	.ifdef @new
+	@FreeMem #@VarData #@VarDataSize
+	eif
+	rts						; ret
+.endl
+
+.local	DLPOKEW						; PROCEDURE
+
+; ------------------------------------------------------------
+
+; Generate Assignment for WORD / SMALLINT / SHORTREAL / POINTER
+; as Pointer
+	mva :STACKORIGIN,x W
+	mva :STACKORIGIN+STACKWIDTH,x W+1
+	dex						; sub bx, 1
+
+; optimize OK (GR4PP), line = 93
+
+	ldy DLIST
+	lda DLIST+1
+	sta :bp+1
+	lda W
+	sta (:bp),y
+
+; optimize OK (GR4PP), line = 94
+
+	lda W+1
+	mwy DLIST :bp2
+	ldy #$01
+	sta (:bp2),y
+
+; optimize OK (GR4PP), line = 95
+
+	lda DLIST
+	add #$02
+	sta DLIST
+	scc
+	inc DLIST+1
+
+; ------------------------------------------------------------
+
+W	= DATAORIGIN+$0013
+
+@VarData	= W
+@VarDataSize	= 2
+
+@exit
+	.ifdef @new
+	@FreeMem #@VarData #@VarDataSize
+	eif
+	rts						; ret
+.endl
+
+.local	BUILDDISPLAYLIST				; PROCEDURE
+
+; ------------------------------------------------------------
+
+; Generate Assignment for BYTE / CHAR / SHORTINT / BOOLEAN
+; as Pointer
+	mva :STACKORIGIN,x BLANKS
+	dex						; sub bx, 1
+
+; ------------------------------------------------------------
+
+; Generate Assignment for BYTE / CHAR / SHORTINT / BOOLEAN
+; as Pointer
+	mva :STACKORIGIN,x LINES
+	dex						; sub bx, 1
+
+; ------------------------------------------------------------
+
+; Generate Assignment for WORD / SMALLINT / SHORTREAL / POINTER
+; as Pointer
+	mva :STACKORIGIN,x VRAMADDRESS
+	mva :STACKORIGIN+STACKWIDTH,x VRAMADDRESS+1
+	dex						; sub bx, 1
+
+; ------------------------------------------------------------
+
+; Generate Assignment for WORD / SMALLINT / SHORTREAL / POINTER
+; as Pointer
+	mva :STACKORIGIN,x DLISTADDRESS
+	mva :STACKORIGIN+STACKWIDTH,x DLISTADDRESS+1
+	dex						; sub bx, 1
+
+; optimize OK (GR4PP), line = 100
+
+	mva DLISTADDRESS DLIST
+	mva DLISTADDRESS+1 DLIST+1
+
+; --- WhileProlog
+l_00AD
+
+; optimize OK (GR4PP), line = 101
+
+	lda BLANKS
+	cmp #$00
+	seq
+	bcs @+
+	jmp l_00BC
+@
+
+; optimize FAIL ('DLPOKE', GR4PP), line = 102
+	inx
+	mva #$70 :STACKORIGIN,x
+	jsr DLPOKE
+
+; optimize FAIL (0, GR4PP), line = 103
+	dec BLANKS
+	jmp l_00AD
+l_00BC
+
+; optimize FAIL ('DLPOKE', GR4PP), line = 105
+	inx
+	mva #$E4 :STACKORIGIN,x
+	jsr DLPOKE
+
+; optimize FAIL ('DLPOKEW', GR4PP), line = 106
+	inx
+	mva VRAMADDRESS :STACKORIGIN,x
+	mva VRAMADDRESS+1 :STACKORIGIN+STACKWIDTH,x
+	jsr DLPOKEW
+
+; optimize OK (GR4PP), line = 108
+
+	lda LINES
+	lsr @
+	sub #$01
+	sta LINES
+
+; --- WhileProlog
+l_00D7
+
+; optimize OK (GR4PP), line = 109
+
+	lda LINES
+	cmp #$00
+	seq
+	bcs @+
+	jmp l_00E6
+@
+
+; optimize FAIL ('DLPOKEW', GR4PP), line = 110
+	inx
+	mva #$84 :STACKORIGIN,x
+	mva #$24 :STACKORIGIN+STACKWIDTH,x
+	jsr DLPOKEW
+
+; optimize FAIL (0, GR4PP), line = 111
+	dec LINES
+	jmp l_00D7
+l_00E6
+
+; optimize FAIL ('DLPOKE', GR4PP), line = 113
+	inx
+	mva #$04 :STACKORIGIN,x
+	jsr DLPOKE
+
+; optimize FAIL ('DLPOKE', GR4PP), line = 114
+	inx
+	mva #$41 :STACKORIGIN,x
+	jsr DLPOKE
+
+; optimize FAIL ('DLPOKEW', GR4PP), line = 115
+	inx
+	mva DLISTADDRESS :STACKORIGIN,x
+	mva DLISTADDRESS+1 :STACKORIGIN+STACKWIDTH,x
+	jsr DLPOKEW
+
+; ------------------------------------------------------------
+
+DLISTADDRESS	= DATAORIGIN+$0015
+VRAMADDRESS	= DATAORIGIN+$0017
+LINES	= DATAORIGIN+$0019
+BLANKS	= DATAORIGIN+$001A
+
+@VarData	= DLISTADDRESS
+@VarDataSize	= 6
+
+@exit
+	.ifdef @new
+	@FreeMem #@VarData #@VarDataSize
+	eif
+	rts						; ret
+.endl
+
+.local	GR4INIT						; PROCEDURE
+
+; ------------------------------------------------------------
+
+; Generate Assignment for BYTE / CHAR / SHORTINT / BOOLEAN
+; as Pointer
+	mva :STACKORIGIN,x BLANKS
+	dex						; sub bx, 1
+
+; ------------------------------------------------------------
+
+; Generate Assignment for BYTE / CHAR / SHORTINT / BOOLEAN
+; as Pointer
+	mva :STACKORIGIN,x PIXELHEIGHT
+	dex						; sub bx, 1
+
+; ------------------------------------------------------------
+
+; Generate Assignment for BYTE / CHAR / SHORTINT / BOOLEAN
+; as Pointer
+	mva :STACKORIGIN,x LINES
+	dex						; sub bx, 1
+
+; ------------------------------------------------------------
+
+; Generate Assignment for WORD / SMALLINT / SHORTREAL / POINTER
+; as Pointer
+	mva :STACKORIGIN,x VRAMADDRESS
+	mva :STACKORIGIN+STACKWIDTH,x VRAMADDRESS+1
+	dex						; sub bx, 1
+
+; ------------------------------------------------------------
+
+; Generate Assignment for WORD / SMALLINT / SHORTREAL / POINTER
+; as Pointer
+	mva :STACKORIGIN,x DLISTADDRESS
+	mva :STACKORIGIN+STACKWIDTH,x DLISTADDRESS+1
+	dex						; sub bx, 1
+
+; optimize FAIL ('BUILDDISPLAYLIST', GR4PP), line = 120
+	inx
+	mva DLISTADDRESS :STACKORIGIN,x
+	mva DLISTADDRESS+1 :STACKORIGIN+STACKWIDTH,x
+	inx
+	mva VRAMADDRESS :STACKORIGIN,x
+	mva VRAMADDRESS+1 :STACKORIGIN+STACKWIDTH,x
+	inx
+	mva LINES :STACKORIGIN,x
+	inx
+	mva BLANKS :STACKORIGIN,x
+	jsr BUILDDISPLAYLIST
+
+; optimize FAIL ('SETPIXELHEIGHT', GR4PP), line = 121
+	inx
+	mva PIXELHEIGHT :STACKORIGIN,x
+	jsr SETPIXELHEIGHT
+
+; optimize OK (GR4PP), line = 122
+
+	mva DLISTADDRESS ATARI.SDLSTL
+	mva DLISTADDRESS+1 ATARI.SDLSTL+1
+
+; optimize OK (GR4PP), line = 123
+
+	mva VRAMADDRESS ATARI.SAVMSC
+	mva VRAMADDRESS+1 ATARI.SAVMSC+1
+
+; optimize OK (GR4PP), line = 124
+
+	mva <G4DLI VDSLST
+	mva >G4DLI VDSLST+1
+
+; optimize OK (GR4PP), line = 125
+
+	mva #$C0 ATARI.NMIEN
+
+; ------------------------------------------------------------
+
+DLISTADDRESS	= DATAORIGIN+$001B
+VRAMADDRESS	= DATAORIGIN+$001D
+LINES	= DATAORIGIN+$001F
+PIXELHEIGHT	= DATAORIGIN+$0020
+BLANKS	= DATAORIGIN+$0021
+
+@VarData	= DLISTADDRESS
+@VarDataSize	= 7
+
+@exit
+	.ifdef @new
+	@FreeMem #@VarData #@VarDataSize
+	eif
+	rts						; ret
+.endl
+
+; ------------------------------------------------------------
+
+DL_BLANK8	= $0070
+DL_DLI	= $0080
+DL_LMS	= $0040
+DL_VSCROLL	= $0020
+DL_MODE_320X192G2	= $000F
+DL_JVB	= $0041
+DLIST	= DATAORIGIN+$000D
+
+.endl							; UNIT GR4PP
+
+.local	VBL						; PROCEDURE | ASSEMBLER | INTERRUPT
+
+; ---------------------  ASM Block 060  ---------------------
+
+
+	lda VS_Upper
+	sta vscrol
+
+	mva >CHARSET_RAM_ADDRESS	chbase
+	
+	jmp xitvbv
+
+	rti						; ret
+.endl
+
+.local	INITSINE					; PROCEDURE | ASSEMBLER
+
+; ---------------------  ASM Block 061  ---------------------
+
+
+	txa:pha
+
+	ldy #$3f
+	ldx #$00
+
+; Accumulate the delta (normal 16-bit addition)
+loop
+	lda #0
+lvalue	equ *-1
+	clc
+	adc #0
+ldelta	equ *-1
+	sta lvalue
+	lda #0
+hvalue	equ *-1
+	adc #0
+hdelta	equ *-1
+	sta hvalue
+
+; Reflect the value around for a sine wave
+	sta adr.sinustable+$c0,x
+	sta adr.sinustable+$80,y
+	eor #$ff
+	sta adr.sinustable+$40,x
+	sta adr.sinustable+$00,y
+
+; Increase the delta, which creates the "acceleration" for a parabola
+	lda ldelta
+	adc #$10   ; this value adds up to the proper amplitude
+	sta ldelta
+	scc
+	inc hdelta
+
+; Loop
+	inx
+	dey
+	bpl loop
+
+	pla:tax
+
+@exit
+	.ifdef @new
+	@FreeMem #@VarData #@VarDataSize
+	eif
+	rts						; ret
+.endl
+
+.local	INITMULDIV					; PROCEDURE
+
+; optimize OK (foxmode_2.pas), line = 87
+
+	mva #$00 S
+	sta S+1
+; --- For
+
+; optimize OK (foxmode_2.pas), line = 89
+
+	sta X
+
+; optimize OK (foxmode_2.pas), line = 89
+
+; --- To
+l_0137
+
+; --- ForToDoCondition
+
+; optimize OK (foxmode_2.pas), line = 89
+
+	lda X
+	cmp #$7F
+	scc
+	jne l_0145
+
+; optimize OK (foxmode_2.pas), line = 90
+
+	lda S+1
+	ldy X
+	sta adr.LOOKUPDIV,y
+
+; optimize OK (foxmode_2.pas), line = 91
+
+	lda #$FF
+	sub X
+	sta :STACKORIGIN+9
+	lda adr.LOOKUPDIV,y
+	ldy :STACKORIGIN+9
+	sta adr.LOOKUPDIV,y
+
+; optimize OK (foxmode_2.pas), line = 93
+
+	lda S
+	add #$16
+	sta S
+	scc
+	inc S+1
+
+; --- ForToDoEpilog
+	inc X						; inc ptr byte [CounterAddress]
+
+	jne l_0137
+
+l_0145
+; --- For
+
+; optimize OK (foxmode_2.pas), line = 96
+
+	mva #$00 X
+
+; optimize OK (foxmode_2.pas), line = 96
+
+; --- To
+l_0174
+
+; --- ForToDoCondition
+
+; optimize OK (foxmode_2.pas), line = 96
+
+	lda X
+	cmp #$FF
+	scc
+	jne l_0182
+
+; optimize OK (foxmode_2.pas), line = 96
+
+	ldy X
+	lda adr.LOOKUPDIV,y
+	sta :eax
+	lda #$0B
+	sta :ecx
+	.ifdef fmulinit
+	fmulu_8
+	els
+	imulCL
+	eif
+	lda :eax
+	ldy X
+	sta adr.LOOKUPMUL,y
+
+; --- ForToDoEpilog
+	inc X						; inc ptr byte [CounterAddress]
+
+	jne l_0174
+
+l_0182
+
+; ------------------------------------------------------------
+
+X	= DATAORIGIN+$0024
+S	= DATAORIGIN+$0025
+@FORTMP_0134	= $007F
+@FORTMP_0171	= $00FF
+
+@VarData	= X
+@VarDataSize	= 3
+
+@exit
+	.ifdef @new
+	@FreeMem #@VarData #@VarDataSize
+	eif
+	rts						; ret
+.endl
+
+.local	DOPLASMA					; PROCEDURE
+
+; optimize OK (foxmode_2.pas), line = 106
+
+	mva #$8A SCRN
+	mva #$A6 SCRN+1
+
+; optimize OK (foxmode_2.pas), line = 108
+
+	mva C1A _C1A
+
+; optimize OK (foxmode_2.pas), line = 109
+
+	mva C1B _C1B
+; --- For
+
+; optimize OK (foxmode_2.pas), line = 111
+
+	mva #$00 I
+
+; optimize OK (foxmode_2.pas), line = 111
+
+; --- To
+l_01B4
+
+; --- ForToDoCondition
+
+; optimize OK (foxmode_2.pas), line = 111
+
+	lda I
+	cmp #$4F
+	scc
+	jne l_01C2
+
+; optimize OK (foxmode_2.pas), line = 112
+
+	ldy _C1A
+	lda adr.SINUSTABLE,y
+	ldy _C1B
+	add adr.SINUSTABLE,y
+	ldy I
+	sta adr.XBUF,y
+
+; optimize OK (foxmode_2.pas), line = 113
+
+	lda _C1A
+	add #$03
+	sta _C1A
+
+; optimize OK (foxmode_2.pas), line = 114
+
+	lda _C1B
+	add #$07
+	sta _C1B
+
+; --- ForToDoEpilog
+	inc I						; inc ptr byte [CounterAddress]
+
+	jne l_01B4
+
+l_01C2
+; --- For
+
+; optimize OK (foxmode_2.pas), line = 117
+
+	mva #$00 II
+
+; optimize OK (foxmode_2.pas), line = 117
+
+; --- To
+l_01E7
+
+; --- ForToDoCondition
+
+; optimize OK (foxmode_2.pas), line = 117
+
+	lda II
+	cmp #$1D
+	scc
+	jne l_01F5
+
+; optimize OK (foxmode_2.pas), line = 119
+
+	ldy _C1A
+	lda adr.SINUSTABLE,y
+	ldy _C1B
+	add adr.SINUSTABLE,y
+	sta TMP
+
+; optimize OK (foxmode_2.pas), line = 121
+
+	lda _C1A
+	add #$04
+	sta _C1A
+
+; optimize OK (foxmode_2.pas), line = 122
+
+	lda _C1B
+	add #$09
+	sta _C1B
+
+; optimize OK (foxmode_2.pas), line = 124
+
+	mva #$00 K
+; --- For
+
+; optimize OK (foxmode_2.pas), line = 125
+
+	sta I
+
+; optimize OK (foxmode_2.pas), line = 125
+
+; --- To
+l_0216
+
+; --- ForToDoCondition
+
+; optimize OK (foxmode_2.pas), line = 125
+
+	lda I
+	cmp #$13
+	scc
+	jne l_0224
+
+; optimize OK (foxmode_2.pas), line = 126
+
+	ldy K
+	lda adr.XBUF,y
+	add TMP
+	tay
+	lda adr.LOOKUPMUL,y
+	sta A
+
+; optimize FAIL (0, foxmode_2.pas), line = 126
+	inc K
+
+; optimize OK (foxmode_2.pas), line = 127
+
+	ldy K
+	lda adr.XBUF,y
+	add TMP
+	tay
+	lda adr.LOOKUPDIV,y
+	sta B
+
+; optimize FAIL (0, foxmode_2.pas), line = 127
+	inc K
+
+; optimize OK (foxmode_2.pas), line = 129
+
+	lda A
+	add B
+	mwy SCRN :bp2
+	ldy I
+	sta (:bp2),y
+
+; --- ForToDoEpilog
+	inc I						; inc ptr byte [CounterAddress]
+
+	jne l_0216
+
+l_0224
+
+; optimize OK (foxmode_2.pas), line = 132
+
+	lda SCRN
+	add #$28
+	sta SCRN
+	scc
+	inc SCRN+1
+
+; --- ForToDoEpilog
+	inc II						; inc ptr byte [CounterAddress]
+
+	jne l_01E7
+
+l_01F5
+
+; optimize OK (foxmode_2.pas), line = 135
+
+	lda C1A
+	add #$03
+	sta C1A
+
+; optimize OK (foxmode_2.pas), line = 136
+
+	lda C1B
+	sub #$05
+	sta C1B
+
+; ------------------------------------------------------------
+
+_C1A	= DATAORIGIN+$0027
+_C1B	= DATAORIGIN+$0028
+I	= DATAORIGIN+$0029
+II	= DATAORIGIN+$002A
+TMP	= DATAORIGIN+$002B
+A	= DATAORIGIN+$002C
+B	= DATAORIGIN+$002D
+K	= DATAORIGIN+$002E
+SCRN	= DATAORIGIN+$002F
+@FORTMP_01B1	= $004F
+@FORTMP_01E4	= $001D
+@FORTMP_0213	= $0013
+
+@VarData	= _C1A
+@VarDataSize	= 10
+
+@exit
+	.ifdef @new
+	@FreeMem #@VarData #@VarDataSize
+	eif
+	rts						; ret
+.endl
+l_0007
+
+; optimize FAIL ('INITSINE', foxmode_2.pas), line = 143
+	jsr INITSINE
+
+; optimize FAIL ('INITMULDIV', foxmode_2.pas), line = 144
+	jsr INITMULDIV
+
+; optimize FAIL ('GR4PP.GR4INIT', foxmode_2.pas), line = 146
+	inx
+	mva #$00 :STACKORIGIN,x
+	mva #$9F :STACKORIGIN+STACKWIDTH,x
+	inx
+	mva #$00 :STACKORIGIN,x
+	mva #$A4 :STACKORIGIN+STACKWIDTH,x
+	inx
+	mva #$3C :STACKORIGIN,x
+	inx
+	mva #$04 :STACKORIGIN,x
+	inx
+	mva #$00 :STACKORIGIN,x
+	jsr GR4PP.GR4INIT
+
+; optimize OK (foxmode_2.pas), line = 148
+
+	lda <VBL
+	ldy #5
+	sta wsync
+	dey
+	rne
+	sta VVBLKD
+	lda >VBL
+	sta VVBLKD+1
+
+; optimize OK (foxmode_2.pas), line = 150
+
+	mva #$00 ATARI.COLBK
+
+; optimize OK (foxmode_2.pas), line = 152
+
+	mva #$22 ATARI.COLOR0
+
+; optimize OK (foxmode_2.pas), line = 153
+
+	mva #$36 ATARI.COLOR1
+
+; optimize OK (foxmode_2.pas), line = 154
+
+	mva #$96 ATARI.COLOR2
+
+; --- RepeatUntilProlog
+l_0286
+
+; optimize FAIL ('DOPLASMA', foxmode_2.pas), line = 158
+	jsr DOPLASMA
+
+; optimize FAIL ('CRT.KEYPRESSED', foxmode_2.pas), line = 160
+	jsr CRT.KEYPRESSED
+	dex
+	lda :STACKORIGIN+1,x
+	jeq l_0286
+
+; ------------------------------------------------------------
+
+DISPLAY_LIST_ADDRESS	= $9F00
+CHARSET_RAM_ADDRESS	= $A000
+VIDEO_RAM_ADDRESS	= $A400
+adr.LOOKUPDIV	= $BD00
+.var LOOKUPDIV	= adr.LOOKUPDIV .word
+adr.LOOKUPMUL	= $BE00
+.var LOOKUPMUL	= adr.LOOKUPMUL .word
+adr.SINUSTABLE	= $BF00
+.var SINUSTABLE	= adr.SINUSTABLE .word
+adr.XBUF	= $0600
+.var XBUF	= adr.XBUF .word
+C1A	= DATAORIGIN+$0022
+C1B	= DATAORIGIN+$0023
+@exit
+
+@halt	ldx #0
+	txs
+
+	rts
+
+; ------------------------------------------------------------
+
+IOCB@COPY	:16 brk
+
+; ------------------------------------------------------------
+
+.local	@DEFINES
+ATARI
+.endl
+
+.endl							; MAIN
+
+; ------------------------------------------------------------
+; ------------------------------------------------------------
+
+.macro	UNITINITIALIZATION
+
+	.ifdef MAIN.SYSTEM.@UnitInit
+	jsr MAIN.SYSTEM.@UnitInit
+	eif
+
+	.ifdef MAIN.ATARI.@UnitInit
+	jsr MAIN.ATARI.@UnitInit
+	eif
+
+	.ifdef MAIN.CRT.@UnitInit
+	jsr MAIN.CRT.@UnitInit
+	eif
+
+	.ifdef MAIN.GR4PP.@UnitInit
+	jsr MAIN.GR4PP.@UnitInit
+	eif
+.endm
+
+; ------------------------------------------------------------
+
+	ift .SIZEOF(MAIN.SYSTEM) > 0
+	.print 'SYSTEM: ',MAIN.SYSTEM,'..',MAIN.SYSTEM+.SIZEOF(MAIN.SYSTEM)-1
+	eif
+
+	ift .SIZEOF(MAIN.ATARI) > 0
+	.print 'ATARI: ',MAIN.ATARI,'..',MAIN.ATARI+.SIZEOF(MAIN.ATARI)-1
+	eif
+
+	ift .SIZEOF(MAIN.CRT) > 0
+	.print 'CRT: ',MAIN.CRT,'..',MAIN.CRT+.SIZEOF(MAIN.CRT)-1
+	eif
+
+	ift .SIZEOF(MAIN.GR4PP) > 0
+	.print 'GR4PP: ',MAIN.GR4PP,'..',MAIN.GR4PP+.SIZEOF(MAIN.GR4PP)-1
+	eif
+
+	.print 'CODE: ',CODEORIGIN,'..',*-1
+
+; ------------------------------------------------------------
+
+DATAORIGIN
+.by  $28 $00 $18 $00 $2D $0C $00 $00  $00 $00 $00 $00 $00 $00 $00 $00  $00 $00 $00 $00 $00 $00 $00 $00
+.by  $00 $00 $00 $00 $00 $00 $00 $00  $00 $00 $01 $05
+
+VARINITSIZE	= *-DATAORIGIN
+VARDATASIZE	= 49
+
+PROGRAMSTACK	= DATAORIGIN+VARDATASIZE
+
+	.print 'DATA: ',DATAORIGIN,'..',PROGRAMSTACK
+
+	run START
+
+; ------------------------------------------------------------
+
+.macro	STATICDATA
+.endm
+
+	end
